@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/Devashish08/frigga-assigment/backend/config"
@@ -82,7 +81,7 @@ func Login(c *gin.Context) {
 		"exp": time.Now().Add(time.Hour * 24 * 30).Unix(),
 	})
 
-	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))
+	tokenString, err := token.SignedString([]byte(config.GetJWTSecret())) // Use our new config function
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create token"})
 		return

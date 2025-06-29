@@ -6,6 +6,7 @@ import (
 
 	"github.com/Devashish08/frigga-assigment/backend/api"
 	"github.com/Devashish08/frigga-assigment/backend/config"
+	"github.com/Devashish08/frigga-assigment/backend/middleware"
 	"github.com/Devashish08/frigga-assigment/backend/models"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,7 @@ func CORSMiddleware() gin.HandlerFunc {
 }
 
 func init() {
+	config.LoadConfig()
 	config.ConnectDB()
 }
 
@@ -52,6 +54,16 @@ func main() {
 				"message": "Go backend is running!",
 			})
 		})
+
+		protected := apiRoutes.Group("/")
+		protected.Use(middleware.AuthMiddleware())
+		{
+			protected.GET("/profile", func(c *gin.Context) {
+				// Get the user from the context
+				user, _ := c.Get("user")
+				c.JSON(http.StatusOK, gin.H{"message": "This is a protected route", "user": user})
+			})
+		}
 	}
 	router.Run(":8080")
 }
