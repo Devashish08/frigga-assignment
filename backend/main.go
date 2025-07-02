@@ -3,6 +3,7 @@ package main
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/Devashish08/frigga-assigment/backend/api"
 	"github.com/Devashish08/frigga-assigment/backend/config"
@@ -34,7 +35,7 @@ func init() {
 }
 
 func main() {
-	err := config.DB.AutoMigrate(&models.User{}, &models.Document{})
+	err := config.DB.AutoMigrate(&models.User{}, &models.Document{}, &models.Permission{})
 	if err != nil {
 		panic("Failed to migrate database")
 	}
@@ -67,6 +68,21 @@ func main() {
 			protected.GET("/documents/:id", api.GetDocument)
 			protected.PUT("/documents/:id", api.UpdateDocument)
 
+			protected.GET("/users/search", api.SearchUsers)
+
+			docPermissionRoutes := protected.Group("/documents/:id")
+			docPermissionRoutes.Use(func(c *gin.Context) {
+				id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid document ID"})
+					return
+				}
+				c.Set("doc_id_as_uint", uint(id))
+				c.Next()
+			})
+			{
+				docPermissionRoutes.POST("/permissions", api.AddPermission)
+			}
 		}
 	}
 	router.Run(":8080")

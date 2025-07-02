@@ -9,18 +9,25 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func GetDocuments(c *gin.Context) {
+// backend/api/document_controller.go
 
-	userCtx, exists := c.Get("user")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found in context"})
-		return
-	}
+// GetDocuments retrieves all documents accessible to the authenticated user
+func GetDocuments(c *gin.Context) {
+	userCtx, _ := c.Get("user")
 	user := userCtx.(models.User)
+
+	// Get IDs of documents shared with the user
+	var sharedDocIDs []uint
+	config.DB.Model(&models.Permission{}).Where("user_id = ?", user.ID).Pluck("document_id", &sharedDocIDs)
 
 	var documents []models.Document
 
-	result := config.DB.Preload("Author").Where("author_id = ?", user.ID).Find(&documents)
+	// NEW, MORE COMPLEX QUERY
+	result := config.DB.Preload("Author").
+		Where("author_id = ? OR is_public = ? OR id IN ?", user.ID, true, sharedDocIDs).
+		Order("updated_at desc").
+		Find(&documents)
+
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve documents"})
 		return
@@ -71,21 +78,42 @@ func CreateDocument(c *gin.Context) {
 	c.JSON(http.StatusCreated, document)
 }
 
+// backend/api/document_controller.go
+
+// GetDocument retrieves a single document by its ID, checking permissions
 func GetDocument(c *gin.Context) {
-	// Get document ID from the URL parameter
 	id := c.Param("id")
 
 	var document models.Document
-	// Find the document and preload its author
-	result := config.DB.Preload("Author").First(&document, id)
-	if result.Error != nil {
+	if err := config.DB.Preload("Author").First(&document, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
 		return
 	}
 
-	// In a later phase, we'll add permission checks here.
-	// For now, any authenticated user can view any document.
+	// THE FIX: Add permission check
+	// If the document is private, we need to verify the user has access
+	if !document.IsPublic {
+		userCtx, exists := c.Get("user")
+		// Check if the user is even logged in (for public link access)
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "You must be logged in to view this private document"})
+			return
+		}
+		user := userCtx.(models.User)
 
+		// Check if the logged-in user is the author
+		if document.AuthorID != user.ID {
+			// NEW PERMISSION CHECK
+			var permission models.Permission
+			err := config.DB.Where("document_id = ? AND user_id = ?", document.ID, user.ID).First(&permission).Error
+			if err != nil { // No permission found
+				c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to view this document"})
+				return
+			}
+		}
+	}
+
+	// If the document is public, or the user is the author, they can view it.
 	c.JSON(http.StatusOK, document)
 }
 
@@ -101,8 +129,16 @@ func UpdateDocument(c *gin.Context) {
 		return
 	}
 
-	// Authorization check: only the author can edit
-	if document.AuthorID != user.ID {
+	// NEW PERMISSION CHECK
+	isAuthor := document.AuthorID == user.ID
+	var hasEditPermission bool
+	if !isAuthor {
+		var permission models.Permission
+		err := config.DB.Where("document_id = ? AND user_id = ? AND level = ?", document.ID, user.ID, models.EditPermission).First(&permission).Error
+		hasEditPermission = err == nil
+	}
+
+	if !isAuthor && !hasEditPermission {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to edit this document"})
 		return
 	}
