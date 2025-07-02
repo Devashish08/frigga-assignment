@@ -34,7 +34,7 @@ func init() {
 }
 
 func main() {
-	err := config.DB.AutoMigrate(&models.User{})
+	err := config.DB.AutoMigrate(&models.User{}, &models.Document{})
 	if err != nil {
 		panic("Failed to migrate database")
 	}
@@ -59,10 +59,11 @@ func main() {
 		protected.Use(middleware.AuthMiddleware())
 		{
 			protected.GET("/profile", func(c *gin.Context) {
-				// Get the user from the context
 				user, _ := c.Get("user")
 				c.JSON(http.StatusOK, gin.H{"message": "This is a protected route", "user": user})
 			})
+			protected.GET("/documents", api.GetDocuments)
+			protected.POST("/documents", api.CreateDocument)
 		}
 	}
 	router.Run(":8080")
