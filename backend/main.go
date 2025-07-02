@@ -64,6 +64,9 @@ func main() {
 			})
 			protected.GET("/documents", api.GetDocuments)
 			protected.POST("/documents", api.CreateDocument)
+			protected.GET("/documents/:id", api.GetDocument)
+			protected.PUT("/documents/:id", api.UpdateDocument)
+
 		}
 	}
 	router.Run(":8080")

@@ -36,8 +36,9 @@ func CreateDocument(c *gin.Context) {
 
 	// Bind request body
 	var body struct {
-		Title   string `json:"title"`
-		Content string `json:"content"`
+		Title    string `json:"title"`
+		Content  string `json:"content"`
+		IsPublic bool   `json:"isPublic"`
 	}
 	if err := c.Bind(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
@@ -54,6 +55,7 @@ func CreateDocument(c *gin.Context) {
 	document := models.Document{
 		Title:    body.Title,
 		Content:  body.Content,
+		IsPublic: body.IsPublic,
 		AuthorID: user.ID,
 	}
 
@@ -67,4 +69,59 @@ func CreateDocument(c *gin.Context) {
 	config.DB.Preload("Author").First(&document, document.ID)
 
 	c.JSON(http.StatusCreated, document)
+}
+
+func GetDocument(c *gin.Context) {
+	// Get document ID from the URL parameter
+	id := c.Param("id")
+
+	var document models.Document
+	// Find the document and preload its author
+	result := config.DB.Preload("Author").First(&document, id)
+	if result.Error != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	}
+
+	// In a later phase, we'll add permission checks here.
+	// For now, any authenticated user can view any document.
+
+	c.JSON(http.StatusOK, document)
+}
+
+// UpdateDocument updates an existing document
+func UpdateDocument(c *gin.Context) {
+	id := c.Param("id")
+	userCtx, _ := c.Get("user")
+	user := userCtx.(models.User)
+
+	var document models.Document
+	if err := config.DB.First(&document, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Document not found"})
+		return
+	}
+
+	// Authorization check: only the author can edit
+	if document.AuthorID != user.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to edit this document"})
+		return
+	}
+
+	var body struct {
+		Title    string `json:"title"`
+		Content  string `json:"content"`
+		IsPublic bool   `json:"isPublic"`
+	}
+	if err := c.Bind(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to read request body"})
+		return
+	}
+
+	// Update the document fields
+	document.Title = body.Title
+	document.Content = body.Content
+	document.IsPublic = body.IsPublic
+	config.DB.Save(&document)
+
+	c.JSON(http.StatusOK, document)
 }
