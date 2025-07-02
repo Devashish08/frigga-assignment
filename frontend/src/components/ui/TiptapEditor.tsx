@@ -3,6 +3,8 @@
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Mention from '@tiptap/extension-mention';
+import { mentionSuggestion } from '@/lib/mentionSuggestion';
 import { useEffect } from 'react';
 
 interface TiptapEditorProps {
@@ -12,7 +14,15 @@ interface TiptapEditorProps {
 
 const TiptapEditor = ({ content, onChange }: TiptapEditorProps) => {
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit,
+      Mention.configure({
+        HTMLAttributes: {
+          class: 'mention',
+        },
+        suggestion: mentionSuggestion,
+      }),
+    ],
     content: content,
     editorProps: {
       attributes: {

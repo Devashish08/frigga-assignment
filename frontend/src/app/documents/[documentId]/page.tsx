@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import withAuth from '@/components/ui/withAuth';
 import TiptapEditor from '@/components/ui/TiptapEditor';
 import { SharingDialog } from '@/components/SharingDialog';
+import { HistorySidebar } from '@/components/HistorySidebar';
 import { Document } from '@/types';
 import { useDebounce } from 'use-debounce';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,7 @@ function DocumentEditorPage() {
   const [isPublic, setIsPublic] = useState(false);
   const [saveStatus, setSaveStatus] = useState('Saved');
   const [isLoading, setIsLoading] = useState(!isNewDocument);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Debounce inputs to trigger auto-save
   const [debouncedTitle] = useDebounce(title, 1000);
@@ -133,29 +135,47 @@ function DocumentEditorPage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-4">
-        <Button asChild variant="outline">
-          <Link href="/dashboard">Back to Dashboard</Link>
-        </Button>
-        
-        {/* Only show Share button for existing documents */}
-        {!isNewDocument && document && <SharingDialog documentId={document.ID} />}
-        
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="public-switch"
-            checked={isPublic}
-            onCheckedChange={(checked) => {
-              setIsPublic(checked);
-              setSaveStatus('Unsaved changes');
-            }}
-          />
-          <Label htmlFor="public-switch">Public</Label>
-        </div>
+    <div className={`flex ${showHistory ? 'h-screen' : ''}`}>
+      {/* Main Editor Content */}
+      <div className={`container mx-auto p-4 ${showHistory ? 'w-2/3' : 'w-full'}`}>
+        <div className="flex justify-between items-center mb-4">
+    {/* --- Left Side --- */}
+    <Button asChild variant="outline">
+      <Link href="/dashboard">Back to Dashboard</Link>
+    </Button>
 
-        <span className="text-sm text-gray-500">{saveStatus}</span>
+    {/* --- Right Side (Grouped) --- */}
+    <div className="flex items-center space-x-4">
+      {/* History Button (only for existing docs) */}
+      {!isNewDocument && document && (
+        <Button variant="outline" onClick={() => setShowHistory(!showHistory)}>
+          {showHistory ? 'Close History' : 'History'}
+        </Button>
+      )}
+
+      {/* Share Button (only for existing docs) */}
+      {!isNewDocument && document && (
+        <SharingDialog documentId={document.ID} />
+      )}
+
+      {/* Public Toggle */}
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="public-switch"
+          checked={isPublic}
+          onCheckedChange={(checked) => {
+            setIsPublic(checked);
+            setSaveStatus('Unsaved changes');
+          }}
+        />
+        <Label htmlFor="public-switch">Public</Label>
       </div>
+
+      {/* Save Status */}
+      <span className="text-sm text-gray-500 w-24 text-right">{saveStatus}</span>
+    </div>
+</div>
+
       <input
         type="text"
         value={title}
@@ -166,13 +186,21 @@ function DocumentEditorPage() {
         placeholder="Document Title..."
         className="text-4xl font-bold w-full focus:outline-none mb-4 bg-transparent"
       />
-      <TiptapEditor 
-        content={content} 
-        onChange={(newContent) => {
-          setContent(newContent);
-          setSaveStatus('Unsaved changes');
-        }} 
-      />
+        <TiptapEditor 
+          content={content} 
+          onChange={(newContent) => {
+            setContent(newContent);
+            setSaveStatus('Unsaved changes');
+          }} 
+        />
+      </div>
+
+      {/* History Sidebar */}
+      {showHistory && document && (
+        <div className="w-1/3 border-l bg-gray-50">
+          <HistorySidebar documentId={document.ID} currentContent={content} />
+        </div>
+      )}
     </div>
   );
 }

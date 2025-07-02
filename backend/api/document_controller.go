@@ -3,6 +3,8 @@ package api
 
 import (
 	"net/http"
+	"regexp"
+	"strconv"
 
 	"github.com/Devashish08/frigga-assigment/backend/config"
 	"github.com/Devashish08/frigga-assigment/backend/models"
@@ -153,11 +155,105 @@ func UpdateDocument(c *gin.Context) {
 		return
 	}
 
+	// --- NEW: Versioning Logic ---
+	// Create a version of the document *before* it's updated.
+	// This captures the state that is being changed.
+	version := models.Version{
+		DocumentID: document.ID,
+		Title:      document.Title,
+		Content:    document.Content,
+		AuthorID:   user.ID, // The user making the current change is the author of this version
+	}
+	config.DB.Create(&version)
+	// --- End of Versioning Logic ---
+
 	// Update the document fields
 	document.Title = body.Title
 	document.Content = body.Content
 	document.IsPublic = body.IsPublic
 	config.DB.Save(&document)
 
+	// --- NEW: Auto-sharing logic ---
+	// Find all mentions in the format <span data-type="mention" data-id="USER_ID">
+	re := regexp.MustCompile(`data-id="(\d+)"`)
+	matches := re.FindAllStringSubmatch(document.Content, -1)
+
+	mentionedUserIDs := make(map[uint]bool)
+	for _, match := range matches {
+		if len(match) > 1 {
+			id, err := strconv.ParseUint(match[1], 10, 32)
+			if err == nil {
+				// Don't grant permission to the author themselves
+				if uint(id) != document.AuthorID {
+					mentionedUserIDs[uint(id)] = true
+				}
+			}
+		}
+	}
+
+	// Grant VIEW permission to each mentioned user
+	for userID := range mentionedUserIDs {
+		permission := models.Permission{
+			UserID:     userID,
+			DocumentID: document.ID,
+			Level:      models.ViewPermission,
+		}
+		// Use a "FirstOrCreate" to avoid creating duplicate permissions
+		// It will only create if a permission for this user/doc combo doesn't exist
+		config.DB.Where(models.Permission{UserID: userID, DocumentID: document.ID}).FirstOrCreate(&permission)
+	}
+	// --- End of auto-sharing logic ---
+
 	c.JSON(http.StatusOK, document)
+}
+
+// SearchDocuments performs a full-text search across accessible documents
+func SearchDocuments(c *gin.Context) {
+	userCtx, _ := c.Get("user")
+	user := userCtx.(models.User)
+	query := c.Query("q")
+
+	if query == "" {
+		c.JSON(http.StatusOK, []models.Document{})
+		return
+	}
+
+	// Get IDs of documents shared with the user
+	var sharedDocIDs []uint
+	config.DB.Model(&models.Permission{}).Where("user_id = ?", user.ID).Pluck("document_id", &sharedDocIDs)
+
+	// Sanitize the search query for LIKE operator
+	searchQuery := "%" + query + "%"
+
+	var documents []models.Document
+	// Build the final query
+	// 1. Check for access permission (author OR public OR shared)
+	// 2. AND check if title OR content matches the search query
+	result := config.DB.Preload("Author").
+		Where("(author_id = ? OR is_public = ? OR id IN ?)", user.ID, true, sharedDocIDs).
+		Where("(title LIKE ? OR content LIKE ?)", searchQuery, searchQuery).
+		Order("updated_at desc").
+		Find(&documents)
+
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to perform search"})
+		return
+	}
+
+	c.JSON(http.StatusOK, documents)
+}
+
+// GetDocumentVersions retrieves all versions for a single document
+func GetDocumentVersions(c *gin.Context) {
+	// For simplicity, we assume the user has permission to view the document
+	// if they are asking for its history. A stricter check could be added.
+	docId := c.Param("id")
+
+	var versions []models.Version
+	config.DB.Preload("Author").
+		Where("document_id = ?", docId).
+		Order("created_at desc").
+		Find(&versions)
+
+	c.JSON(http.StatusOK, versions)
 }

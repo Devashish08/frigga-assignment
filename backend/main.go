@@ -35,7 +35,7 @@ func init() {
 }
 
 func main() {
-	err := config.DB.AutoMigrate(&models.User{}, &models.Document{}, &models.Permission{})
+	err := config.DB.AutoMigrate(&models.User{}, &models.Document{}, &models.Permission{}, &models.Version{})
 	if err != nil {
 		panic("Failed to migrate database")
 	}
@@ -65,6 +65,7 @@ func main() {
 			})
 			protected.GET("/documents", api.GetDocuments)
 			protected.POST("/documents", api.CreateDocument)
+			protected.GET("/documents/search", api.SearchDocuments) // Add search route
 			protected.GET("/documents/:id", api.GetDocument)
 			protected.PUT("/documents/:id", api.UpdateDocument)
 
@@ -82,6 +83,7 @@ func main() {
 			})
 			{
 				docPermissionRoutes.POST("/permissions", api.AddPermission)
+				docPermissionRoutes.GET("/versions", api.GetDocumentVersions)
 			}
 		}
 	}

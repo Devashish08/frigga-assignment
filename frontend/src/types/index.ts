@@ -14,3 +14,11 @@ export interface User {
     authorId: number;
     author: User;
   }
+  
+  export interface Version {
+    ID: number;
+    CreatedAt: string;
+    title: string;
+    content: string;
+    author: User;
+  }

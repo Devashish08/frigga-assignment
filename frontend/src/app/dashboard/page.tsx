@@ -1,12 +1,13 @@
 // frontend/src/app/dashboard/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import withAuth from '@/components/ui/withAuth';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
 import { Document } from '@/types';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
 import Link from 'next/link';
 
@@ -55,6 +56,15 @@ function DashboardPage() {
     router.push('/login');
   };
 
+  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const searchQuery = formData.get('search') as string;
+    if (searchQuery) {
+      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+    }
+  };
+
   const renderDocumentList = () => {
     if (isLoading) {
       return <p>Loading documents...</p>;
@@ -63,7 +73,7 @@ function DashboardPage() {
       return <p className="text-red-500">{error}</p>;
     }
     if (documents.length === 0) {
-      return <p className="text-gray-600">You have no documents yet. Click "Create New Document" to get started!</p>;
+      return <p className="text-gray-600">You have no documents yet. Click &ldquo;Create New Document&rdquo; to get started!</p>;
     }
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -95,6 +105,18 @@ function DashboardPage() {
         </nav>
       </header>
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Search Form */}
+        <div className="mb-8">
+          <form onSubmit={handleSearch}>
+            <Input
+              name="search"
+              type="search"
+              placeholder="Search across all documents..."
+              className="w-full"
+            />
+          </form>
+        </div>
+
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-semibold text-gray-900">My Documents</h2>
           <Button asChild>
